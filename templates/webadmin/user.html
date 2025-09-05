@@ -160,6 +160,21 @@ explicit grant from the SFTPGo Team (support@sftpgo.com).
                 <div class="card-body">
                     <div id="public_keys">
                         {{- template "infomsg-no-mb" "general.pub_keys_help"}}
+                        
+                        <!-- SSH Key Generation Section -->
+                        <div class="form-group mb-5">
+                            <div class="d-flex flex-wrap gap-3 align-items-center">
+                                <button type="button" id="generateKeysBtn" class="btn btn-primary">
+                                    <i class="ki-duotone ki-key fs-3">
+                                        <span class="path1"></span>
+                                        <span class="path2"></span>
+                                    </i>
+                                    Generate SSH Key Pair
+                                </button>
+                                <div class="form-text">Generate a new SSH key pair and automatically add the public key</div>
+                            </div>
+                        </div>
+
                         <div class="form-group">
                             <div data-repeater-list="public_keys">
                                 {{- range $idx, $val := .User.PublicKeys}}
@@ -909,6 +924,131 @@ explicit grant from the SFTPGo Team (support@sftpgo.com).
                 submitButton.disabled = true;
                 //{{- end}}
             });
+
+            // SSH Key Generation functionality
+            $('#generateKeysBtn').on('click', function() {
+                const button = $(this);
+                const originalText = button.html();
+                
+                // Show loading state
+                button.prop('disabled', true).html('<span class="spinner-border spinner-border-sm me-2"></span>Generating...');
+                
+                // Get CSRF token
+                const csrfToken = $('input[name="_form_token"]').val();
+                
+                // Make request to generate keys
+                $.ajax({
+                    url: '{{.CurrentURL}}/generate-ssh-keys',
+                    type: 'POST',
+                    headers: {
+                        'X-CSRF-TOKEN': csrfToken
+                    },
+                    dataType: 'json',
+                    success: function(data) {
+                        // Add the public key to the form
+                        const publicKeysContainer = $('div[data-repeater-list="public_keys"]');
+                        const newKeyItem = publicKeysContainer.find('[data-repeater-item]:last').clone();
+                        
+                        // Clear the cloned item and set the generated public key
+                        newKeyItem.find('textarea[name="public_key"]').val(data.public_key.trim());
+                        
+                        // If this is the first key and the existing item is empty, replace it
+                        const existingTextarea = publicKeysContainer.find('textarea[name="public_key"]').first();
+                        if (existingTextarea.val().trim() === '') {
+                            existingTextarea.val(data.public_key.trim());
+                        } else {
+                            // Add new item
+                            publicKeysContainer.append(newKeyItem);
+                        }
+                        
+                        // Show modal with private key for download
+                        showPrivateKeyModal(data.private_key);
+                        
+                        // Show success message
+                        showSuccessMessage('SSH key pair generated successfully! Please download the private key.');
+                    },
+                    error: function(xhr, status, error) {
+                        console.error('Error generating SSH keys:', error);
+                        showErrorMessage('Failed to generate SSH key pair: ' + (xhr.responseJSON?.message || error));
+                    },
+                    complete: function() {
+                        // Reset button state
+                        button.prop('disabled', false).html(originalText);
+                    }
+                });
+            });
+
+            // Function to show private key download modal
+            function showPrivateKeyModal(privateKey) {
+                const modalHtml = `
+                    <div class="modal fade" id="privateKeyModal" tabindex="-1" aria-hidden="true">
+                        <div class="modal-dialog modal-lg">
+                            <div class="modal-content">
+                                <div class="modal-header">
+                                    <h5 class="modal-title">Download Private Key</h5>
+                                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                                </div>
+                                <div class="modal-body">
+                                    <div class="alert alert-warning">
+                                        <strong>Important:</strong> This is your private key. Download and save it securely. 
+                                        You won't be able to retrieve it again!
+                                    </div>
+                                    <div class="form-group">
+                                        <label class="form-label">Private Key:</label>
+                                        <textarea class="form-control" rows="10" readonly id="privateKeyContent">${privateKey}</textarea>
+                                    </div>
+                                </div>
+                                <div class="modal-footer">
+                                    <button type="button" class="btn btn-primary" id="downloadPrivateKey">
+                                        <i class="ki-duotone ki-down fs-3"></i>
+                                        Download Private Key
+                                    </button>
+                                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                `;
+                
+                // Remove existing modal if any
+                $('#privateKeyModal').remove();
+                
+                // Add modal to body
+                $('body').append(modalHtml);
+                
+                // Show modal
+                const modal = new bootstrap.Modal(document.getElementById('privateKeyModal'));
+                modal.show();
+                
+                // Handle download button click
+                $('#downloadPrivateKey').on('click', function() {
+                    const blob = new Blob([privateKey], { type: 'text/plain' });
+                    const url = window.URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = 'sftpgo-private-key.pem';
+                    document.body.appendChild(a);
+                    a.click();
+                    document.body.removeChild(a);
+                    window.URL.revokeObjectURL(url);
+                });
+                
+                // Clean up modal when hidden
+                $('#privateKeyModal').on('hidden.bs.modal', function() {
+                    $(this).remove();
+                });
+            }
+
+            // Helper functions for showing messages
+            function showSuccessMessage(message) {
+                // You can customize this based on your existing notification system
+                console.log('Success:', message);
+            }
+
+            function showErrorMessage(message) {
+                // You can customize this based on your existing notification system
+                console.error('Error:', message);
+            }
 
         });
 </script>

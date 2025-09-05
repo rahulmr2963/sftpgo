@@ -1765,6 +1765,8 @@ func (s *httpdServer) setupWebAdminRoutes() {
 				router.With(s.checkPerms(dataprovider.PermAdminAddUsers)).Post(webUserPath, s.handleWebAddUserPost)
 				router.With(s.checkPerms(dataprovider.PermAdminChangeUsers)).Post(webUserPath+"/{username}",
 					s.handleWebUpdateUserPost)
+				router.With(s.checkPerms(dataprovider.PermAdminAddUsers), s.verifyCSRFHeader).
+					Post(webUserPath+"/generate-ssh-keys", s.handleWebGenerateUserSSHKeys)
 				router.With(s.checkPerms(dataprovider.PermAdminManageGroups), s.refreshCookie).
 					Get(webGroupsPath, s.handleWebGetGroups)
 				router.With(s.checkPerms(dataprovider.PermAdminManageGroups), compressor.Handler, s.refreshCookie).
