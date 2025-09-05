@@ -31,6 +31,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/go-chi/render"
 	"github.com/rs/xid"
 	"github.com/sftpgo/sdk"
 	sdkkms "github.com/sftpgo/sdk/kms"
@@ -3539,6 +3540,31 @@ func (s *httpdServer) handleWebUpdateUserPost(w http.ResponseWriter, r *http.Req
 		disconnectUser(user.Username, claims.Username, claims.Role)
 	}
 	http.Redirect(w, r, webUsersPath, http.StatusSeeOther)
+}
+
+func (s *httpdServer) handleWebGenerateUserSSHKeys(w http.ResponseWriter, r *http.Request) {
+	r.Body = http.MaxBytesReader(w, r.Body, maxRequestSize)
+	claims, err := getTokenClaims(r)
+	if err != nil || claims.Username == "" {
+		sendAPIResponse(w, r, err, "Invalid token claims", http.StatusBadRequest)
+		return
+	}
+
+	if err := verifyCSRFToken(r, s.csrfTokenAuth); err != nil {
+		sendAPIResponse(w, r, err, "Invalid CSRF token", http.StatusForbidden)
+		return
+	}
+
+	// Generate SSH key pair
+	keyPair, err := util.GenerateSSHKeyPairInMemory()
+	if err != nil {
+		logger.Warn(logSender, "", "error generating SSH key pair: %v", err)
+		sendAPIResponse(w, r, err, "Unable to generate SSH key pair", http.StatusInternalServerError)
+		return
+	}
+
+	// Return the key pair as JSON
+	render.JSON(w, r, keyPair)
 }
 
 func (s *httpdServer) handleWebGetStatus(w http.ResponseWriter, r *http.Request) {

@@ -425,6 +425,41 @@ func GenerateECDSAKeys(file string) error {
 	return os.WriteFile(file+pubKeySuffix, ssh.MarshalAuthorizedKey(pub), 0600)
 }
 
+// SSHKeyPair represents an SSH key pair
+type SSHKeyPair struct {
+	PrivateKey string `json:"private_key"`
+	PublicKey  string `json:"public_key"`
+}
+
+// GenerateSSHKeyPairInMemory generates an SSH key pair and returns it as strings
+func GenerateSSHKeyPairInMemory() (*SSHKeyPair, error) {
+	// Generate RSA key pair
+	key, err := rsa.GenerateKey(rand.Reader, 3072)
+	if err != nil {
+		return nil, err
+	}
+
+	// Encode private key
+	privKeyBytes := x509.MarshalPKCS1PrivateKey(key)
+	privBlock := &pem.Block{
+		Type:  "RSA PRIVATE KEY",
+		Bytes: privKeyBytes,
+	}
+	privateKeyPEM := pem.EncodeToMemory(privBlock)
+
+	// Generate public key
+	pub, err := ssh.NewPublicKey(&key.PublicKey)
+	if err != nil {
+		return nil, err
+	}
+	publicKeyBytes := ssh.MarshalAuthorizedKey(pub)
+
+	return &SSHKeyPair{
+		PrivateKey: string(privateKeyPEM),
+		PublicKey:  string(publicKeyBytes),
+	}, nil
+}
+
 // GenerateEd25519Keys generate ed25519 private and public keys and write the
 // private key to specified file and the public key to the specified
 // file adding the .pub suffix
