@@ -938,38 +938,50 @@ explicit grant from the SFTPGo Team (support@sftpgo.com).
                 
                 // Make request to generate keys
                 $.ajax({
-                    url: '{{.CurrentURL}}/generate-ssh-keys',
+                    url: '{{.UserURL}}/generate-ssh-keys',
                     type: 'POST',
                     headers: {
                         'X-CSRF-TOKEN': csrfToken
                     },
                     dataType: 'json',
                     success: function(data) {
-                        // Add the public key to the form
+                        // Find the first empty public key textarea
                         const publicKeysContainer = $('div[data-repeater-list="public_keys"]');
-                        const newKeyItem = publicKeysContainer.find('[data-repeater-item]:last').clone();
+                        const emptyTextarea = publicKeysContainer.find('textarea[name="public_key"]').filter(function() {
+                            return $(this).val().trim() === '';
+                        }).first();
                         
-                        // Clear the cloned item and set the generated public key
-                        newKeyItem.find('textarea[name="public_key"]').val(data.public_key.trim());
-                        
-                        // If this is the first key and the existing item is empty, replace it
-                        const existingTextarea = publicKeysContainer.find('textarea[name="public_key"]').first();
-                        if (existingTextarea.val().trim() === '') {
-                            existingTextarea.val(data.public_key.trim());
+                        if (emptyTextarea.length > 0) {
+                            // Use existing empty textarea
+                            emptyTextarea.val(data.public_key.trim());
                         } else {
-                            // Add new item
-                            publicKeysContainer.append(newKeyItem);
+                            // Add a new public key field using the repeater's add functionality
+                            const addButton = publicKeysContainer.closest('#public_keys').find('[data-repeater-create]');
+                            if (addButton.length > 0) {
+                                addButton.click();
+                                // Wait a bit for the new field to be created, then populate it
+                                setTimeout(function() {
+                                    const newTextarea = publicKeysContainer.find('textarea[name="public_key"]').last();
+                                    newTextarea.val(data.public_key.trim());
+                                }, 100);
+                            }
                         }
                         
                         // Show modal with private key for download
                         showPrivateKeyModal(data.private_key);
                         
                         // Show success message
-                        showSuccessMessage('SSH key pair generated successfully! Please download the private key.');
+                        showToast(1, 'SSH key pair generated successfully! Please download the private key.');
                     },
                     error: function(xhr, status, error) {
                         console.error('Error generating SSH keys:', error);
-                        showErrorMessage('Failed to generate SSH key pair: ' + (xhr.responseJSON?.message || error));
+                        let errorMessage = 'Failed to generate SSH key pair';
+                        if (xhr.responseJSON && xhr.responseJSON.message) {
+                            errorMessage += ': ' + xhr.responseJSON.message;
+                        } else if (error) {
+                            errorMessage += ': ' + error;
+                        }
+                        showToast(0, errorMessage);
                     },
                     complete: function() {
                         // Reset button state
@@ -1003,6 +1015,10 @@ explicit grant from the SFTPGo Team (support@sftpgo.com).
                                         <i class="ki-duotone ki-down fs-3"></i>
                                         Download Private Key
                                     </button>
+                                    <button type="button" class="btn btn-light-primary" id="copyPrivateKey">
+                                        <i class="ki-duotone ki-copy fs-3"></i>
+                                        Copy to Clipboard
+                                    </button>
                                     <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
                                 </div>
                             </div>
@@ -1026,28 +1042,57 @@ explicit grant from the SFTPGo Team (support@sftpgo.com).
                     const url = window.URL.createObjectURL(blob);
                     const a = document.createElement('a');
                     a.href = url;
-                    a.download = 'sftpgo-private-key.pem';
+                    
+                    // Generate a more descriptive filename with timestamp
+                    const timestamp = new Date().toISOString().slice(0, 19).replace(/:/g, '-');
+                    const username = $('#idUsername').val() || 'new-user';
+                    a.download = `sftpgo-${username}-private-key-${timestamp}.pem`;
+                    
                     document.body.appendChild(a);
                     a.click();
                     document.body.removeChild(a);
                     window.URL.revokeObjectURL(url);
                 });
                 
+                // Handle copy to clipboard button click
+                $('#copyPrivateKey').on('click', function() {
+                    const privateKeyTextarea = document.getElementById('privateKeyContent');
+                    privateKeyTextarea.select();
+                    privateKeyTextarea.setSelectionRange(0, 99999); // For mobile devices
+                    
+                    try {
+                        const successful = document.execCommand('copy');
+                        if (successful) {
+                            showToast(1, 'Private key copied to clipboard');
+                            $(this).html('<i class="ki-duotone ki-check fs-3"></i> Copied!').prop('disabled', true);
+                            setTimeout(() => {
+                                $(this).html('<i class="ki-duotone ki-copy fs-3"></i> Copy to Clipboard').prop('disabled', false);
+                            }, 2000);
+                        } else {
+                            showToast(0, 'Failed to copy to clipboard');
+                        }
+                    } catch (err) {
+                        // Fallback for modern browsers
+                        if (navigator.clipboard) {
+                            navigator.clipboard.writeText(privateKey).then(() => {
+                                showToast(1, 'Private key copied to clipboard');
+                                $(this).html('<i class="ki-duotone ki-check fs-3"></i> Copied!').prop('disabled', true);
+                                setTimeout(() => {
+                                    $(this).html('<i class="ki-duotone ki-copy fs-3"></i> Copy to Clipboard').prop('disabled', false);
+                                }, 2000);
+                            }).catch(() => {
+                                showToast(0, 'Failed to copy to clipboard');
+                            });
+                        } else {
+                            showToast(0, 'Copy to clipboard not supported');
+                        }
+                    }
+                });
+                
                 // Clean up modal when hidden
                 $('#privateKeyModal').on('hidden.bs.modal', function() {
                     $(this).remove();
                 });
-            }
-
-            // Helper functions for showing messages
-            function showSuccessMessage(message) {
-                // You can customize this based on your existing notification system
-                console.log('Success:', message);
-            }
-
-            function showErrorMessage(message) {
-                // You can customize this based on your existing notification system
-                console.error('Error:', message);
             }
 
         });
