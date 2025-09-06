@@ -3563,6 +3563,11 @@ func (s *httpdServer) handleWebGenerateUserSSHKeys(w http.ResponseWriter, r *htt
 		return
 	}
 
+	// Log SSH key generation event
+	ipAddr := util.GetIPFromRemoteAddress(r.RemoteAddr)
+	logger.Info(logSender, "", "SSH key pair generated successfully by admin %q from IP %q", 
+		claims.Username, ipAddr)
+
 	// Return the key pair as JSON
 	render.JSON(w, r, keyPair)
 }
