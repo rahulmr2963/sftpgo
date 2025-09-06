@@ -160,20 +160,6 @@ explicit grant from the SFTPGo Team (support@sftpgo.com).
                 <div class="card-body">
                     <div id="public_keys">
                         {{- template "infomsg-no-mb" "general.pub_keys_help"}}
-                        
-                        <!-- SSH Key Generation Section -->
-                        <div class="form-group mb-5">
-                            <div class="d-flex flex-wrap gap-3 align-items-center">
-                                <button type="button" id="generateKeysBtn" class="btn btn-primary">
-                                    <i class="ki-duotone ki-key fs-3">
-                                        <span class="path1"></span>
-                                        <span class="path2"></span>
-                                    </i>
-                                    Generate SSH Key Pair
-                                </button>
-                                <div class="form-text">Generate a new SSH key pair and automatically add the public key</div>
-                            </div>
-                        </div>
 
                         <div class="form-group">
                             <div data-repeater-list="public_keys">
@@ -226,10 +212,29 @@ explicit grant from the SFTPGo Team (support@sftpgo.com).
                         </div>
 
                         <div class="form-group mt-5">
-                            <a href="#" data-repeater-create class="btn btn-light-primary">
-                                <i class="ki-duotone ki-plus fs-3"></i>
-                                <span data-i18n="general.add">Add</span>
-                            </a>
+                            <div class="d-flex flex-wrap gap-3 align-items-center justify-content-between">
+                                <a href="#" data-repeater-create class="btn btn-light-primary">
+                                    <i class="ki-duotone ki-plus fs-3"></i>
+                                    <span data-i18n="general.add">Add</span>
+                                </a>
+                                
+                                <!-- SSH Key Generation Section -->
+                                <div class="d-flex flex-wrap gap-3 align-items-center">
+                                    <small class="form-text text-muted">or</small>
+                                    <button type="button" id="generateKeysBtn" class="btn btn-primary">
+                                        <i class="ki-duotone ki-key fs-3">
+                                            <span class="path1"></span>
+                                            <span class="path2"></span>
+                                        </i>
+                                        Generate SSH Key Pair
+                                    </button>
+                                </div>
+                            </div>
+                            <div class="form-text mt-2">
+                                <strong>⚠️ Security Note:</strong> Keys are generated on the server and the private key is transmitted to your browser. 
+                                Download it immediately and ensure you're using a secure connection (HTTPS). 
+                                The private key is not stored on the server after generation.
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -945,32 +950,8 @@ explicit grant from the SFTPGo Team (support@sftpgo.com).
                     },
                     dataType: 'json',
                     success: function(data) {
-                        // Find the first empty public key textarea
-                        const publicKeysContainer = $('div[data-repeater-list="public_keys"]');
-                        const emptyTextarea = publicKeysContainer.find('textarea[name="public_key"]').filter(function() {
-                            return $(this).val().trim() === '';
-                        }).first();
-                        
-                        if (emptyTextarea.length > 0) {
-                            // Use existing empty textarea
-                            emptyTextarea.val(data.public_key.trim());
-                        } else {
-                            // Add a new public key field using the repeater's add functionality
-                            const addButton = publicKeysContainer.closest('#public_keys').find('[data-repeater-create]');
-                            if (addButton.length > 0) {
-                                addButton.click();
-                                // Wait a bit for the new field to be created, then populate it
-                                setTimeout(function() {
-                                    const newTextarea = publicKeysContainer.find('textarea[name="public_key"]').last();
-                                    newTextarea.val(data.public_key.trim());
-                                }, 100);
-                            }
-                        }
-                        
-                        // Show modal with private key for download
+                        addPublicKeyToForm(data.public_key);
                         showPrivateKeyModal(data.private_key);
-                        
-                        // Show success message
                         showToast(1, 'SSH key pair generated successfully! Please download the private key.');
                     },
                     error: function(xhr, status, error) {
@@ -990,6 +971,30 @@ explicit grant from the SFTPGo Team (support@sftpgo.com).
                 });
             });
 
+            function addPublicKeyToForm(publicKey) {
+                // Find the first empty public key textarea
+                const publicKeysContainer = $('div[data-repeater-list="public_keys"]');
+                const emptyTextarea = publicKeysContainer.find('textarea[name="public_key"]').filter(function() {
+                    return $(this).val().trim() === '';
+                }).first();
+                
+                if (emptyTextarea.length > 0) {
+                    // Use existing empty textarea
+                    emptyTextarea.val(publicKey.trim());
+                } else {
+                    // Add a new public key field using the repeater's add functionality
+                    const addButton = publicKeysContainer.closest('#public_keys').find('[data-repeater-create]');
+                    if (addButton.length > 0) {
+                        addButton.click();
+                        // Wait a bit for the new field to be created, then populate it
+                        setTimeout(function() {
+                            const newTextarea = publicKeysContainer.find('textarea[name="public_key"]').last();
+                            newTextarea.val(publicKey.trim());
+                        }, 100);
+                    }
+                }
+            }
+
             // Function to show private key download modal
             function showPrivateKeyModal(privateKey) {
                 const modalHtml = `
@@ -1001,13 +1006,19 @@ explicit grant from the SFTPGo Team (support@sftpgo.com).
                                     <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
                                 </div>
                                 <div class="modal-body">
-                                    <div class="alert alert-warning">
-                                        <strong>Important:</strong> This is your private key. Download and save it securely. 
-                                        You won't be able to retrieve it again!
+                                    <div class="alert alert-danger">
+                                        <h6 class="alert-heading"><i class="ki-duotone ki-security-user fs-2 me-2"><span class="path1"></span><span class="path2"></span></i>Security Warning</h6>
+                                        <p class="mb-2"><strong>This is your private SSH key.</strong> It provides access to the user account and should be kept strictly confidential.</p>
+                                        <ul class="mb-0">
+                                            <li><strong>Download immediately</strong> - you won't be able to retrieve it again</li>
+                                            <li><strong>Store securely</strong> - protect it like a password</li>
+                                            <li><strong>Never share it</strong> - only the public key should be shared</li>
+                                            <li><strong>Use HTTPS</strong> - ensure your connection is secure</li>
+                                        </ul>
                                     </div>
                                     <div class="form-group">
-                                        <label class="form-label">Private Key:</label>
-                                        <textarea class="form-control" rows="10" readonly id="privateKeyContent">${privateKey}</textarea>
+                                        <label class="form-label">Private Key (PEM format):</label>
+                                        <textarea class="form-control font-monospace" rows="12" readonly id="privateKeyContent">${privateKey}</textarea>
                                     </div>
                                 </div>
                                 <div class="modal-footer">
