@@ -2,3 +2,17 @@
 sftpgo
 sftpgo.exe
 sftpgo_api_test.log
+
+# database and log files - not for repository
+*.db
+*.log
+*.sqlite
+*.sqlite3
+
+# SSH key files - not for repository
+id_rsa*
+id_ecdsa*
+id_ed25519*
+
+# compiled binaries in examples
+examples/*/sftpgo-*

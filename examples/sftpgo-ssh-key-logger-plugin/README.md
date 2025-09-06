@@ -13,7 +13,7 @@ This is an example plugin for SFTPGo that demonstrates how to create a notifier 
 
 1. Initialize the Go module and download dependencies:
 ```bash
-cd /tmp/sftpgo-ssh-key-logger-plugin
+cd examples/sftpgo-ssh-key-logger-plugin
 go mod tidy
 ```
 
