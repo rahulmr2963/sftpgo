@@ -453,10 +453,13 @@ func GenerateSSHKeyPairInMemory() (*SSHKeyPair, error) {
 		return nil, err
 	}
 	publicKeyBytes := ssh.MarshalAuthorizedKey(pub)
+	
+	// Add a comment to identify the key
+	publicKeyWithComment := strings.TrimSpace(string(publicKeyBytes)) + " sftpgo-generated-key"
 
 	return &SSHKeyPair{
 		PrivateKey: string(privateKeyPEM),
-		PublicKey:  string(publicKeyBytes),
+		PublicKey:  publicKeyWithComment,
 	}, nil
 }
 
