@@ -994,6 +994,12 @@ explicit grant from the SFTPGo Team (support@sftpgo.com).
 
     $(document).on("i18nshow", function(){
         datatable.init();
+        if (window.SFTPGoPrivateKeyManager) {
+            const pendingKey = window.SFTPGoPrivateKeyManager.get();
+            if (pendingKey && pendingKey.privateKey) {
+                window.SFTPGoPrivateKeyManager.show(pendingKey);
+            }
+        }
     });
 </script>
 {{- end}}

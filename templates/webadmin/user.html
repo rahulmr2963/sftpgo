@@ -212,28 +212,59 @@ explicit grant from the SFTPGo Team (support@sftpgo.com).
                         </div>
 
                         <div class="form-group mt-5">
-                            <div class="d-flex flex-wrap gap-3 align-items-center justify-content-between">
-                                <a href="#" data-repeater-create class="btn btn-light-primary">
-                                    <i class="ki-duotone ki-plus fs-3"></i>
-                                    <span data-i18n="general.add">Add</span>
-                                </a>
-                                
-                                <!-- SSH Key Generation Section -->
-                                <div class="d-flex flex-wrap gap-3 align-items-center">
-                                    <small class="form-text text-muted">or</small>
-                                    <button type="button" id="generateKeysBtn" class="btn btn-primary">
-                                        <i class="ki-duotone ki-key fs-3">
-                                            <span class="path1"></span>
-                                            <span class="path2"></span>
-                                        </i>
-                                        Generate SSH Key Pair
-                                    </button>
+                            <a href="#" data-repeater-create class="btn btn-light-primary">
+                                <i class="ki-duotone ki-plus fs-3"></i>
+                                <span data-i18n="general.add">Add</span>
+                            </a>
+                        </div>
+
+                        <div class="form-group mt-5">
+                            <div class="card border border-dashed border-primary-subtle">
+                                <div class="card-body p-5">
+                                    <div class="d-flex flex-column flex-lg-row gap-5 align-items-start">
+                                        <div class="flex-grow-1">
+                                            <h4 class="fw-semibold mb-2" data-i18n="user.ssh_key_generator.title">Generate SSH key pair</h4>
+                                            <p class="text-gray-600 mb-4" data-i18n="user.ssh_key_generator.subtitle">Create an SSH key pair in PEM format and populate the public key field automatically.</p>
+                                            <div class="d-flex flex-wrap gap-3">
+                                                <button type="button" id="generateKeysBtn" class="btn btn-primary">
+                                                    <i class="ki-duotone ki-key fs-3 me-2">
+                                                        <span class="path1"></span>
+                                                        <span class="path2"></span>
+                                                    </i>
+                                                    <span class="btn-label" data-i18n="user.ssh_key_generator.generate_button">Generate key pair</span>
+                                                </button>
+                                                <button type="button" id="reviewGeneratedKeyBtn" class="btn btn-light-primary d-none">
+                                                    <i class="ki-duotone ki-eye fs-3 me-2">
+                                                        <span class="path1"></span>
+                                                        <span class="path2"></span>
+                                                    </i>
+                                                    <span class="btn-label" data-i18n="user.ssh_key_generator.view_button">Show private key</span>
+                                                </button>
+                                            </div>
+                                            <div id="sshKeyGenerationStatus" class="alert alert-info mt-4 d-none">
+                                                <div class="d-flex align-items-start">
+                                                    <i class="ki-duotone ki-information-5 fs-2x me-3 text-info">
+                                                        <span class="path1"></span>
+                                                        <span class="path2"></span>
+                                                        <span class="path3"></span>
+                                                    </i>
+                                                    <div>
+                                                        <div id="sshKeyStatusMessage" class="fw-semibold"></div>
+                                                        <div id="sshKeyStatusDetail" class="text-gray-700 mt-1"></div>
+                                                        <div id="sshKeyStatusReminder" class="text-gray-600 small mt-2"></div>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                        <div class="flex-grow-1 flex-lg-grow-0 w-100" style="max-width: 320px;">
+                                            <div class="border border-dashed border-gray-300 rounded p-4 bg-light">
+                                                <div class="fs-7 text-gray-700" data-i18n="user.ssh_key_generator.security_note">
+                                                    Keys are generated on the server and the private key is transmitted to your browser only once. Download it immediately and ensure you are using a secure HTTPS connection.
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
                                 </div>
-                            </div>
-                            <div class="form-text mt-2">
-                                <strong>⚠️ Security Note:</strong> Keys are generated on the server and the private key is transmitted to your browser. 
-                                Download it immediately and ensure you're using a secure connection (HTTPS). 
-                                The private key is not stored on the server after generation.
                             </div>
                         </div>
                     </div>
@@ -930,18 +961,72 @@ explicit grant from the SFTPGo Team (support@sftpgo.com).
                 //{{- end}}
             });
 
-            // SSH Key Generation functionality
+            const keyManager = window.SFTPGoPrivateKeyManager || null;
+
+            function formatTimestampForStatus(value) {
+                const formatOptions = { val: { year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit', second: '2-digit' } };
+                if (!value) {
+                    return $.t('general.datetime', { val: new Date(), formatParams: formatOptions });
+                }
+                const parsedDate = new Date(value);
+                if (Number.isNaN(parsedDate.getTime())) {
+                    return $.t('general.datetime', { val: new Date(), formatParams: formatOptions });
+                }
+                return $.t('general.datetime', { val: parsedDate, formatParams: formatOptions });
+            }
+
+            function updateGeneratedKeyStatus(keyData) {
+                if (!keyData || !keyData.privateKey) {
+                    resetGeneratedKeyStatus();
+                    return;
+                }
+
+                const username = (keyData.username || '').trim() || $.t('user.ssh_key_modal.default_username');
+                const timestampLabel = formatTimestampForStatus(keyData.generatedAt);
+
+                const statusContainer = $('#sshKeyGenerationStatus');
+                statusContainer.removeClass('d-none alert-info').addClass('alert-success');
+                setI18NData($('#sshKeyStatusMessage'), 'user.ssh_key_generator.status_generated');
+                setI18NData($('#sshKeyStatusDetail'), 'user.ssh_key_generator.status_generated_details', {
+                    username: username,
+                    timestamp: timestampLabel
+                });
+                setI18NData($('#sshKeyStatusReminder'), 'user.ssh_key_generator.status_pending');
+                $('#reviewGeneratedKeyBtn').removeClass('d-none');
+            }
+
+            function resetGeneratedKeyStatus() {
+                $('#sshKeyGenerationStatus').addClass('d-none').removeClass('alert-success').addClass('alert-info');
+                $('#sshKeyStatusMessage').text('');
+                $('#sshKeyStatusDetail').text('');
+                $('#sshKeyStatusReminder').text('');
+                $('#reviewGeneratedKeyBtn').addClass('d-none');
+            }
+
+            if (keyManager) {
+                const storedKey = keyManager.get();
+                if (storedKey) {
+                    updateGeneratedKeyStatus(storedKey);
+                }
+
+                window.addEventListener('sftpgo:private-key-generated', function(event) {
+                    if (event && event.detail) {
+                        updateGeneratedKeyStatus(event.detail);
+                    }
+                });
+
+                window.addEventListener('sftpgo:private-key-cleared', function() {
+                    resetGeneratedKeyStatus();
+                });
+            }
+
             $('#generateKeysBtn').on('click', function() {
                 const button = $(this);
-                const originalText = button.html();
-                
-                // Show loading state
-                button.prop('disabled', true).html('<span class="spinner-border spinner-border-sm me-2"></span>Generating...');
-                
-                // Get CSRF token
+                const originalHtml = button.html();
+                button.prop('disabled', true).html('<span class="spinner-border spinner-border-sm me-2"></span>' + $.t('general.wait'));
+
                 const csrfToken = $('input[name="_form_token"]').val();
-                
-                // Make request to generate keys
+
                 $.ajax({
                     url: '{{.UserURL}}/generate-ssh-keys',
                     type: 'POST',
@@ -950,160 +1035,74 @@ explicit grant from the SFTPGo Team (support@sftpgo.com).
                     },
                     dataType: 'json',
                     success: function(data) {
-                        addPublicKeyToForm(data.public_key);
-                        showPrivateKeyModal(data.private_key);
-                        showToast(1, 'SSH key pair generated successfully! Please download the private key.');
+                        if (data && data.public_key) {
+                            addPublicKeyToForm(data.public_key);
+                        }
+
+                        if (keyManager && data && data.private_key) {
+                            keyManager.show({
+                                privateKey: data.private_key,
+                                publicKey: data.public_key || '',
+                                generatedAt: data.generated_at || new Date().toISOString(),
+                                username: ($('#idUsername').val() || '').trim()
+                            });
+                        }
+
+                        showToast(1, 'user.ssh_key_generator.success');
                     },
                     error: function(xhr, status, error) {
-                        console.error('Error generating SSH keys:', error);
-                        let errorMessage = 'Failed to generate SSH key pair';
-                        if (xhr.responseJSON && xhr.responseJSON.message) {
-                            errorMessage += ': ' + xhr.responseJSON.message;
+                        let errorMessage = $.t('user.ssh_key_generator.error');
+                        if (xhr && xhr.responseJSON && xhr.responseJSON.message) {
+                            errorMessage = errorMessage + ': ' + xhr.responseJSON.message;
                         } else if (error) {
-                            errorMessage += ': ' + error;
+                            errorMessage = errorMessage + ': ' + error;
                         }
                         showToast(0, errorMessage);
                     },
                     complete: function() {
-                        // Reset button state
-                        button.prop('disabled', false).html(originalText);
+                        button.prop('disabled', false).html(originalHtml);
                     }
                 });
             });
 
+            $('#reviewGeneratedKeyBtn').on('click', function() {
+                if (!keyManager) {
+                    return;
+                }
+                const storedKey = keyManager.get();
+                if (storedKey && storedKey.privateKey) {
+                    keyManager.show(storedKey);
+                }
+            });
+
+            if (keyManager) {
+                $('#user_form').on('submit', function() {
+                    const storedKey = keyManager.get();
+                    if (storedKey && storedKey.privateKey) {
+                        storedKey.username = ($('#idUsername').val() || '').trim();
+                        keyManager.save(storedKey);
+                    }
+                });
+            }
+
             function addPublicKeyToForm(publicKey) {
-                // Find the first empty public key textarea
                 const publicKeysContainer = $('div[data-repeater-list="public_keys"]');
                 const emptyTextarea = publicKeysContainer.find('textarea[name="public_key"]').filter(function() {
                     return $(this).val().trim() === '';
                 }).first();
-                
+
                 if (emptyTextarea.length > 0) {
-                    // Use existing empty textarea
                     emptyTextarea.val(publicKey.trim());
                 } else {
-                    // Add a new public key field using the repeater's add functionality
                     const addButton = publicKeysContainer.closest('#public_keys').find('[data-repeater-create]');
                     if (addButton.length > 0) {
-                        addButton.click();
-                        // Wait a bit for the new field to be created, then populate it
+                        addButton.trigger('click');
                         setTimeout(function() {
                             const newTextarea = publicKeysContainer.find('textarea[name="public_key"]').last();
                             newTextarea.val(publicKey.trim());
                         }, 100);
                     }
                 }
-            }
-
-            // Function to show private key download modal
-            function showPrivateKeyModal(privateKey) {
-                const modalHtml = `
-                    <div class="modal fade" id="privateKeyModal" tabindex="-1" aria-hidden="true">
-                        <div class="modal-dialog modal-lg">
-                            <div class="modal-content">
-                                <div class="modal-header">
-                                    <h5 class="modal-title">Download Private Key</h5>
-                                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-                                </div>
-                                <div class="modal-body">
-                                    <div class="alert alert-danger">
-                                        <h6 class="alert-heading"><i class="ki-duotone ki-security-user fs-2 me-2"><span class="path1"></span><span class="path2"></span></i>Security Warning</h6>
-                                        <p class="mb-2"><strong>This is your private SSH key.</strong> It provides access to the user account and should be kept strictly confidential.</p>
-                                        <ul class="mb-0">
-                                            <li><strong>Download immediately</strong> - you won't be able to retrieve it again</li>
-                                            <li><strong>Store securely</strong> - protect it like a password</li>
-                                            <li><strong>Never share it</strong> - only the public key should be shared</li>
-                                            <li><strong>Use HTTPS</strong> - ensure your connection is secure</li>
-                                        </ul>
-                                    </div>
-                                    <div class="form-group">
-                                        <label class="form-label">Private Key (PEM format):</label>
-                                        <textarea class="form-control font-monospace" rows="12" readonly id="privateKeyContent">${privateKey}</textarea>
-                                    </div>
-                                </div>
-                                <div class="modal-footer">
-                                    <button type="button" class="btn btn-primary" id="downloadPrivateKey">
-                                        <i class="ki-duotone ki-down fs-3"></i>
-                                        Download Private Key
-                                    </button>
-                                    <button type="button" class="btn btn-light-primary" id="copyPrivateKey">
-                                        <i class="ki-duotone ki-copy fs-3"></i>
-                                        Copy to Clipboard
-                                    </button>
-                                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                `;
-                
-                // Remove existing modal if any
-                $('#privateKeyModal').remove();
-                
-                // Add modal to body
-                $('body').append(modalHtml);
-                
-                // Show modal
-                const modal = new bootstrap.Modal(document.getElementById('privateKeyModal'));
-                modal.show();
-                
-                // Handle download button click
-                $('#downloadPrivateKey').on('click', function() {
-                    const blob = new Blob([privateKey], { type: 'text/plain' });
-                    const url = window.URL.createObjectURL(blob);
-                    const a = document.createElement('a');
-                    a.href = url;
-                    
-                    // Generate a more descriptive filename with timestamp
-                    const timestamp = new Date().toISOString().slice(0, 19).replace(/:/g, '-');
-                    const username = $('#idUsername').val() || 'new-user';
-                    a.download = `sftpgo-${username}-private-key-${timestamp}.pem`;
-                    
-                    document.body.appendChild(a);
-                    a.click();
-                    document.body.removeChild(a);
-                    window.URL.revokeObjectURL(url);
-                });
-                
-                // Handle copy to clipboard button click
-                $('#copyPrivateKey').on('click', function() {
-                    const privateKeyTextarea = document.getElementById('privateKeyContent');
-                    privateKeyTextarea.select();
-                    privateKeyTextarea.setSelectionRange(0, 99999); // For mobile devices
-                    
-                    try {
-                        const successful = document.execCommand('copy');
-                        if (successful) {
-                            showToast(1, 'Private key copied to clipboard');
-                            $(this).html('<i class="ki-duotone ki-check fs-3"></i> Copied!').prop('disabled', true);
-                            setTimeout(() => {
-                                $(this).html('<i class="ki-duotone ki-copy fs-3"></i> Copy to Clipboard').prop('disabled', false);
-                            }, 2000);
-                        } else {
-                            showToast(0, 'Failed to copy to clipboard');
-                        }
-                    } catch (err) {
-                        // Fallback for modern browsers
-                        if (navigator.clipboard) {
-                            navigator.clipboard.writeText(privateKey).then(() => {
-                                showToast(1, 'Private key copied to clipboard');
-                                $(this).html('<i class="ki-duotone ki-check fs-3"></i> Copied!').prop('disabled', true);
-                                setTimeout(() => {
-                                    $(this).html('<i class="ki-duotone ki-copy fs-3"></i> Copy to Clipboard').prop('disabled', false);
-                                }, 2000);
-                            }).catch(() => {
-                                showToast(0, 'Failed to copy to clipboard');
-                            });
-                        } else {
-                            showToast(0, 'Copy to clipboard not supported');
-                        }
-                    }
-                });
-                
-                // Clean up modal when hidden
-                $('#privateKeyModal').on('hidden.bs.modal', function() {
-                    $(this).remove();
-                });
             }
 
         });

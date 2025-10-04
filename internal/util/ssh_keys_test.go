@@ -40,6 +40,11 @@ func TestGenerateSSHKeyPairInMemory(t *testing.T) {
 		t.Error("Public key doesn't have correct SSH format")
 	}
 
+	// Verify generated timestamp is set
+	if keyPair.GeneratedAt.IsZero() {
+		t.Error("GeneratedAt timestamp is not set")
+	}
+
 	// Verify public key can be parsed by SSH library
 	_, _, _, _, err = ssh.ParseAuthorizedKey([]byte(keyPair.PublicKey))
 	if err != nil {
@@ -58,5 +63,9 @@ func TestGenerateSSHKeyPairInMemory(t *testing.T) {
 
 	if keyPair.PublicKey == keyPair2.PublicKey {
 		t.Error("Two key generations produced identical public keys")
+	}
+
+	if keyPair.GeneratedAt.After(keyPair2.GeneratedAt) {
+		t.Error("Expected second key pair to have a generated timestamp equal to or after the first one")
 	}
 }

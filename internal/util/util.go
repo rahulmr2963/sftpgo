@@ -427,8 +427,9 @@ func GenerateECDSAKeys(file string) error {
 
 // SSHKeyPair represents an SSH key pair
 type SSHKeyPair struct {
-	PrivateKey string `json:"private_key"`
-	PublicKey  string `json:"public_key"`
+	PrivateKey  string    `json:"private_key"`
+	PublicKey   string    `json:"public_key"`
+	GeneratedAt time.Time `json:"generated_at"`
 }
 
 // GenerateSSHKeyPairInMemory generates an SSH key pair and returns it as strings
@@ -453,13 +454,14 @@ func GenerateSSHKeyPairInMemory() (*SSHKeyPair, error) {
 		return nil, err
 	}
 	publicKeyBytes := ssh.MarshalAuthorizedKey(pub)
-	
+
 	// Add a comment to identify the key
 	publicKeyWithComment := strings.TrimSpace(string(publicKeyBytes)) + " sftpgo-generated-key"
 
 	return &SSHKeyPair{
-		PrivateKey: string(privateKeyPEM),
-		PublicKey:  publicKeyWithComment,
+		PrivateKey:  string(privateKeyPEM),
+		PublicKey:   publicKeyWithComment,
+		GeneratedAt: time.Now().UTC(),
 	}, nil
 }
 
