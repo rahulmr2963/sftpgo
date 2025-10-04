@@ -1111,6 +1111,318 @@ explicit grant from the SFTPGo Team (support@sftpgo.com).
                 toast.show();
             }
 
+            const SFTPGoPrivateKeyManager = (function(window, document, $) {
+                const STORAGE_KEY = 'sftpgo.pendingPrivateKey';
+                let storageSupported;
+
+                function storageAvailable() {
+                    if (storageSupported !== undefined) {
+                        return storageSupported;
+                    }
+                    storageSupported = false;
+                    try {
+                        const testKey = STORAGE_KEY + '_test';
+                        window.sessionStorage.setItem(testKey, '1');
+                        window.sessionStorage.removeItem(testKey);
+                        storageSupported = true;
+                    } catch (err) {
+                        storageSupported = false;
+                    }
+                    return storageSupported;
+                }
+
+                function normalizeData(data) {
+                    if (!data) {
+                        return null;
+                    }
+                    const privateKey = data.privateKey || data.private_key || '';
+                    if (!privateKey) {
+                        return null;
+                    }
+                    return {
+                        privateKey: privateKey,
+                        publicKey: data.publicKey || data.public_key || '',
+                        username: data.username || '',
+                        generatedAt: data.generatedAt || data.generated_at || new Date().toISOString(),
+                    };
+                }
+
+                function persist(normalized) {
+                    if (storageAvailable()) {
+                        try {
+                            window.sessionStorage.setItem(STORAGE_KEY, JSON.stringify(normalized));
+                        } catch (err) {
+                            console.warn('Unable to persist private key in sessionStorage', err);
+                        }
+                    }
+                    window.dispatchEvent(new CustomEvent('sftpgo:private-key-generated', { detail: normalized }));
+                }
+
+                function readStored() {
+                    if (!storageAvailable()) {
+                        return null;
+                    }
+                    const raw = window.sessionStorage.getItem(STORAGE_KEY);
+                    if (!raw) {
+                        return null;
+                    }
+                    try {
+                        const parsed = JSON.parse(raw);
+                        return normalizeData(parsed);
+                    } catch (err) {
+                        window.sessionStorage.removeItem(STORAGE_KEY);
+                        return null;
+                    }
+                }
+
+                function clearStored() {
+                    if (storageAvailable()) {
+                        window.sessionStorage.removeItem(STORAGE_KEY);
+                    }
+                    window.dispatchEvent(new CustomEvent('sftpgo:private-key-cleared'));
+                }
+
+                function ensureModal() {
+                    if (document.getElementById('sftpgoPrivateKeyModal')) {
+                        return;
+                    }
+                    const modalTemplate = `
+                        <div class="modal fade" id="sftpgoPrivateKeyModal" tabindex="-1" aria-hidden="true">
+                            <div class="modal-dialog modal-lg modal-dialog-centered">
+                                <div class="modal-content">
+                                    <div class="modal-header">
+                                        <h5 class="modal-title" data-i18n="user.ssh_key_modal.title">Save the private key</h5>
+                                        <button type="button" class="btn-close" data-bs-dismiss="modal" data-i18n="[aria-label]general.close"></button>
+                                    </div>
+                                    <div class="modal-body">
+                                        <div class="alert alert-danger d-flex align-items-start">
+                                            <i class="ki-duotone ki-security-user fs-2x me-4">
+                                                <span class="path1"></span>
+                                                <span class="path2"></span>
+                                            </i>
+                                            <div>
+                                                <h6 class="fw-bold mb-2" data-i18n="user.ssh_key_modal.warning">Security warning</h6>
+                                                <p id="sftpgo-private-key-intro" class="mb-2" data-i18n="user.ssh_key_modal.intro">This private key grants access to the user account. You can download it only once.</p>
+                                                <ul class="mb-0 ps-5">
+                                                    <li data-i18n="user.ssh_key_modal.tip_download">Download the private key immediately. It will not be shown again after you close this window.</li>
+                                                    <li data-i18n="user.ssh_key_modal.tip_store">Store the private key in a secure password manager or vault.</li>
+                                                    <li data-i18n="user.ssh_key_modal.tip_share">Never share the private key. Only the public key can be distributed.</li>
+                                                    <li data-i18n="user.ssh_key_modal.tip_https">Ensure you are connected via HTTPS before downloading the key.</li>
+                                                </ul>
+                                            </div>
+                                        </div>
+                                        <div class="mb-4">
+                                            <p id="sftpgo-private-key-summary" class="fw-semibold mb-1 text-gray-700"></p>
+                                            <p id="sftpgo-private-key-timestamp" class="text-gray-600 small mb-0"></p>
+                                        </div>
+                                        <div class="form-group">
+                                            <label for="sftpgo-private-key-content" class="form-label" data-i18n="user.ssh_key_modal.private_label">Private key (PEM format)</label>
+                                            <textarea class="form-control font-monospace" id="sftpgo-private-key-content" rows="12" readonly spellcheck="false"></textarea>
+                                        </div>
+                                    </div>
+                                    <div class="modal-footer flex-wrap gap-2">
+                                        <button type="button" class="btn btn-primary" id="sftpgo-private-key-download">
+                                            <i class="ki-duotone ki-down fs-3 me-2">
+                                                <span class="path1"></span>
+                                                <span class="path2"></span>
+                                            </i>
+                                            <span class="btn-label" data-i18n="user.ssh_key_modal.download_btn">Download private key</span>
+                                        </button>
+                                        <button type="button" class="btn btn-light-primary" id="sftpgo-private-key-copy">
+                                            <i class="ki-duotone ki-copy fs-3 me-2">
+                                                <span class="path1"></span>
+                                                <span class="path2"></span>
+                                            </i>
+                                            <span class="btn-label" data-i18n="user.ssh_key_modal.copy_btn">Copy to clipboard</span>
+                                        </button>
+                                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
+                                            <span data-i18n="general.close">Close</span>
+                                        </button>
+                                        <button type="button" class="btn btn-success ms-sm-auto" id="sftpgo-private-key-confirm">
+                                            <i class="ki-duotone ki-shield-tick fs-3 me-2">
+                                                <span class="path1"></span>
+                                                <span class="path2"></span>
+                                            </i>
+                                            <span class="btn-label" data-i18n="user.ssh_key_modal.confirm_btn">I have saved the private key</span>
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>`;
+                    $('body').append(modalTemplate);
+                    $('#sftpgoPrivateKeyModal').localize();
+                }
+
+                function formatFilenameTimestamp(date) {
+                    const pad = (num) => String(num).padStart(2, '0');
+                    return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}_${pad(date.getHours())}-${pad(date.getMinutes())}-${pad(date.getSeconds())}`;
+                }
+
+                function sanitizeUsername(username) {
+                    const value = (username || '').trim();
+                    const sanitized = value.replace(/[^A-Za-z0-9._-]+/g, '-');
+                    return sanitized !== '' ? sanitized : $.t('user.ssh_key_modal.default_username');
+                }
+
+                function buildFilename(username, generatedDate) {
+                    const prefix = $.t('user.ssh_key_modal.filename_prefix');
+                    return `${prefix}-${sanitizeUsername(username)}-private-key-${formatFilenameTimestamp(generatedDate)}.pem`;
+                }
+
+                function showModal(normalized) {
+                    ensureModal();
+                    const modalElement = document.getElementById('sftpgoPrivateKeyModal');
+                    if (!modalElement) {
+                        return;
+                    }
+                    $('#sftpgoPrivateKeyModal').localize();
+                    const username = (normalized.username || '').trim() || $.t('user.ssh_key_modal.default_username');
+                    const generatedISO = normalized.generatedAt || new Date().toISOString();
+                    let generatedDate = new Date(generatedISO);
+                    if (Number.isNaN(generatedDate.getTime())) {
+                        generatedDate = new Date();
+                    }
+                    const localizedTimestamp = $.t('general.datetime', {
+                        val: generatedDate,
+                        formatParams: { val: { year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit', second: '2-digit' } }
+                    });
+                    modalElement.dataset.privateKey = normalized.privateKey;
+                    modalElement.dataset.generatedAt = generatedISO;
+                    modalElement.dataset.username = username;
+                    modalElement.dataset.filename = buildFilename(username, generatedDate);
+                    const textarea = document.getElementById('sftpgo-private-key-content');
+                    if (textarea) {
+                        textarea.value = normalized.privateKey;
+                    }
+                    setI18NData($('#sftpgo-private-key-summary'), 'user.ssh_key_modal.generated_for', { username: username });
+                    setI18NData($('#sftpgo-private-key-timestamp'), 'user.ssh_key_modal.generated_at', { timestamp: localizedTimestamp });
+                    const copyButton = $('#sftpgo-private-key-copy');
+                    copyButton.removeClass('btn-success').addClass('btn-light-primary').prop('disabled', false);
+                    setI18NData(copyButton.find('.btn-label'), 'user.ssh_key_modal.copy_btn');
+                    const modalInstance = bootstrap.Modal.getOrCreateInstance(modalElement);
+                    modalInstance.show();
+                }
+
+                return {
+                    save: function(data) {
+                        const normalized = normalizeData(data);
+                        if (!normalized) {
+                            return;
+                        }
+                        persist(normalized);
+                    },
+                    get: function() {
+                        return readStored();
+                    },
+                    clear: function() {
+                        clearStored();
+                    },
+                    show: function(data) {
+                        const normalized = data ? normalizeData(data) : readStored();
+                        if (!normalized) {
+                            return;
+                        }
+                        if (data) {
+                            persist(normalized);
+                        }
+                        showModal(normalized);
+                    }
+                };
+            })(window, document, window.jQuery);
+
+            window.SFTPGoPrivateKeyManager = SFTPGoPrivateKeyManager;
+
+            $(document).on('click', '#sftpgo-private-key-download', function() {
+                const modalElement = document.getElementById('sftpgoPrivateKeyModal');
+                if (!modalElement || !modalElement.dataset.privateKey) {
+                    return;
+                }
+                const blob = new Blob([modalElement.dataset.privateKey], { type: 'application/x-pem-file' });
+                const url = window.URL.createObjectURL(blob);
+                const link = document.createElement('a');
+                link.href = url;
+                link.download = modalElement.dataset.filename || 'sftpgo-private-key.pem';
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+                window.URL.revokeObjectURL(url);
+            });
+
+            $(document).on('click', '#sftpgo-private-key-copy', function() {
+                const button = $(this);
+                const label = button.find('.btn-label');
+                const privateKey = $('#sftpgo-private-key-content').val();
+                if (!privateKey) {
+                    showToast(0, 'user.ssh_key_generator.copy_error');
+                    return;
+                }
+
+                function handleSuccess() {
+                    showToast(1, 'user.ssh_key_generator.copy_success');
+                    button.removeClass('btn-light-primary').addClass('btn-success').prop('disabled', true);
+                    setI18NData(label, 'general.copied');
+                    setTimeout(function() {
+                        button.prop('disabled', false).removeClass('btn-success').addClass('btn-light-primary');
+                        setI18NData(label, 'user.ssh_key_modal.copy_btn');
+                    }, 2000);
+                }
+
+                function handleFailure(messageKey) {
+                    showToast(0, messageKey);
+                }
+
+                function fallbackCopy() {
+                    const textarea = document.createElement('textarea');
+                    textarea.value = privateKey;
+                    textarea.setAttribute('readonly', '');
+                    textarea.style.position = 'absolute';
+                    textarea.style.left = '-9999px';
+                    document.body.appendChild(textarea);
+                    textarea.select();
+                    try {
+                        if (document.execCommand('copy')) {
+                            handleSuccess();
+                        } else {
+                            handleFailure('user.ssh_key_generator.copy_error');
+                        }
+                    } catch (err) {
+                        handleFailure('user.ssh_key_generator.clipboard_not_supported');
+                    } finally {
+                        document.body.removeChild(textarea);
+                    }
+                }
+
+                if (navigator.clipboard && navigator.clipboard.writeText) {
+                    navigator.clipboard.writeText(privateKey).then(handleSuccess).catch(function() {
+                        fallbackCopy();
+                    });
+                } else {
+                    fallbackCopy();
+                }
+            });
+
+            $(document).on('click', '#sftpgo-private-key-confirm', function() {
+                if (window.SFTPGoPrivateKeyManager) {
+                    window.SFTPGoPrivateKeyManager.clear();
+                }
+                const modalElement = document.getElementById('sftpgoPrivateKeyModal');
+                if (modalElement) {
+                    const modalInstance = bootstrap.Modal.getInstance(modalElement);
+                    if (modalInstance) {
+                        modalInstance.hide();
+                    }
+                }
+            });
+
+            $(document).on('hidden.bs.modal', '#sftpgoPrivateKeyModal', function() {
+                this.dataset.privateKey = '';
+                this.dataset.filename = '';
+                const textarea = document.getElementById('sftpgo-private-key-content');
+                if (textarea) {
+                    textarea.value = '';
+                }
+            });
+
             function doLogout() {
                 ModalAlert.fire({
                     text: $.t("general.confirm_logout"),
